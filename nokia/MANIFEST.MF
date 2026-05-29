@@ -1,0 +1,7 @@
+MIDlet-1: NAFBChat,/icon.png,nafbchat.NAFBChat
+MIDlet-Name: NAFBChat
+MIDlet-Vendor: NAFBChat
+MIDlet-Version: 1.0.0
+MicroEdition-Configuration: CLDC-1.1
+MicroEdition-Profile: MIDP-2.0
+MIDlet-Permissions: javax.microedition.io.Connector.bluetooth.client,javax.microedition.io.Connector.bluetooth.server

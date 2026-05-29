@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="NAFBChat" default="jar" basedir=".">
+
+    <property name="src.dir"     value="src"/>
+    <property name="build.dir"   value="build"/>
+    <property name="classes.dir" value="${build.dir}/classes"/>
+    <property name="jar.dir"     value="${build.dir}/jar"/>
+    <property name="jar.name"    value="NAFBChat.jar"/>
+    <property name="jad.name"    value="NAFBChat.jad"/>
+
+    <!-- CLDC/MIDP API jar - GitHub Actions'da indirilir -->
+    <property name="midp.jar"    value="${build.dir}/libs/midpapi.jar"/>
+    <property name="cldc.jar"    value="${build.dir}/libs/cldcapi.jar"/>
+
+    <target name="init">
+        <mkdir dir="${classes.dir}"/>
+        <mkdir dir="${jar.dir}"/>
+    </target>
+
+    <target name="compile" depends="init">
+        <javac
+            srcdir="${src.dir}"
+            destdir="${classes.dir}"
+            source="1.4"
+            target="1.4"
+            bootclasspath="${cldc.jar}:${midp.jar}"
+            classpath="${cldc.jar}:${midp.jar}"
+            debug="false"
+            optimize="true"
+        />
+    </target>
+
+    <target name="preverify" depends="compile">
+        <!-- preverify tool Nokia SDK'dan gelir -->
+        <exec executable="${build.dir}/tools/preverify" failonerror="false">
+            <arg value="-classpath"/>
+            <arg value="${cldc.jar}:${midp.jar}"/>
+            <arg value="-d"/>
+            <arg value="${classes.dir}"/>
+            <arg value="${classes.dir}"/>
+        </exec>
+    </target>
+
+    <target name="jar" depends="preverify">
+        <jar destfile="${jar.dir}/${jar.name}" manifest="MANIFEST.MF">
+            <fileset dir="${classes.dir}"/>
+        </jar>
+
+        <!-- JAD dosyasındaki jar boyutunu güncelle -->
+        <length file="${jar.dir}/${jar.name}" property="jar.size"/>
+        <copy file="${jad.name}" todir="${jar.dir}"/>
+        <replaceregexp
+            file="${jar.dir}/${jad.name}"
+            match="MIDlet-Jar-Size: .*"
+            replace="MIDlet-Jar-Size: ${jar.size}"
+        />
+
+        <echo message="=== Build OK ==="/>
+        <echo message="JAR: ${jar.dir}/${jar.name}"/>
+        <echo message="JAD: ${jar.dir}/${jad.name}"/>
+    </target>
+
+    <target name="clean">
+        <delete dir="${build.dir}"/>
+    </target>
+
+</project>

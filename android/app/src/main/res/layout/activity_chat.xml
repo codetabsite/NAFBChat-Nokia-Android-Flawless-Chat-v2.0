@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000">
+
+    <!-- Üst bar: başlık + cihazlar butonu -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#0A0A0A"
+        android:padding="10dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="NAFBChat"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"/>
+
+        <Button
+            android:id="@+id/btnDevices"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📡 Cihazlar"
+            android:textColor="#000000"
+            android:backgroundTint="#FFFFFF"
+            android:textSize="12sp"
+            android:padding="8dp"/>
+
+    </LinearLayout>
+
+    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#222222"/>
+
+    <!-- Chat log -->
+    <ScrollView
+        android:id="@+id/scrollView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/tvChat"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:lineSpacingExtra="4dp"
+            android:fontFamily="monospace"/>
+
+    </ScrollView>
+
+    <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#222222"/>
+
+    <!-- Mesaj giriş -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#0A0A0A"
+        android:padding="8dp">
+
+        <EditText
+            android:id="@+id/etMessage"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Mesaj yaz..."
+            android:textColor="#FFFFFF"
+            android:textColorHint="#444444"
+            android:backgroundTint="#1A1A1A"
+            android:textSize="15sp"
+            android:padding="10dp"
+            android:maxLines="3"
+            android:inputType="textMultiLine|textCapSentences"
+            android:imeOptions="actionSend"/>
+
+        <Button
+            android:id="@+id/btnSend"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="↑"
+            android:textColor="#000000"
+            android:backgroundTint="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:minWidth="48dp"
+            android:padding="10dp"/>
+
+    </LinearLayout>
+
+</LinearLayout>
