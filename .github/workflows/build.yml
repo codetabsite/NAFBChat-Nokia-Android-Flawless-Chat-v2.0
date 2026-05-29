@@ -1,0 +1,139 @@
+name: NAFBChat Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 1) Nokia JAR (J2ME)
+  # ─────────────────────────────────────────────
+  build-nokia-jar:
+    name: Build Nokia JAR (J2ME)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '8'
+
+      - name: Install Ant
+        run: sudo apt-get install -y ant
+
+      - name: Download MicroEmu stubs (CLDC + MIDP + JSR-82)
+        run: |
+          mkdir -p nokia/build/libs
+          curl -fL -o nokia/build/libs/cldcapi.jar \
+            "https://repo1.maven.org/maven2/org/microemu/microemu-cldc/2.0.4/microemu-cldc-2.0.4.jar"
+          curl -fL -o nokia/build/libs/midpapi.jar \
+            "https://repo1.maven.org/maven2/org/microemu/microemu-midp/2.0.4/microemu-midp-2.0.4.jar"
+          curl -fL -o nokia/build/libs/jsr82.jar \
+            "https://repo1.maven.org/maven2/org/microemu/microemu-jsr-82/2.0.4/microemu-jsr-82-2.0.4.jar"
+          for f in nokia/build/libs/*.jar; do
+            jar tf "$f" > /dev/null 2>&1 && echo "$f: OK" || echo "$f: BOZUK"
+          done
+
+      - name: Compile J2ME sources
+        working-directory: nokia
+        run: |
+          mkdir -p build/classes build/jar
+          javac -source 8 -target 8 \
+            -classpath "build/libs/cldcapi.jar:build/libs/midpapi.jar:build/libs/jsr82.jar" \
+            -d build/classes \
+            $(find src -name "*.java")
+          echo "Derlenen class sayısı: $(find build/classes -name '*.class' | wc -l)"
+
+      - name: Package JAR
+        working-directory: nokia
+        run: |
+          jar cfm build/jar/NAFBChat.jar MANIFEST.MF -C build/classes .
+          JAR_SIZE=$(stat -c%s build/jar/NAFBChat.jar)
+          sed "s/MIDlet-Jar-Size: 0/MIDlet-Jar-Size: $JAR_SIZE/" NAFBChat.jad > build/jar/NAFBChat.jad
+          echo "=== JAR Build OK ==="
+          ls -lh build/jar/
+
+      - name: Upload Nokia artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAFBChat-Nokia
+          path: |
+            nokia/build/jar/NAFBChat.jar
+            nokia/build/jar/NAFBChat.jad
+          retention-days: 30
+
+  # ─────────────────────────────────────────────
+  # 2) Android APK
+  # ─────────────────────────────────────────────
+  build-android-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "8.4"
+
+      - name: Build Debug APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon
+
+      - name: Build Release APK (unsigned)
+        working-directory: android
+        run: gradle assembleRelease --no-daemon
+
+      - name: Rename APKs
+        run: |
+          mkdir -p output
+          cp android/app/build/outputs/apk/debug/app-debug.apk output/NAFBChat-debug.apk
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk output/NAFBChat-release-unsigned.apk 2>/dev/null || \
+          cp android/app/build/outputs/apk/release/app-release.apk output/NAFBChat-release.apk 2>/dev/null || true
+          ls -lh output/
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAFBChat-Android
+          path: output/*.apk
+          retention-days: 30
+
+  # ─────────────────────────────────────────────
+  # 3) Özet
+  # ─────────────────────────────────────────────
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [build-nokia-jar, build-android-apk]
+    if: always()
+
+    steps:
+      - name: Summary
+        run: |
+          echo "## NAFBChat Build Sonuçları" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Durum |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Nokia JAR (J2ME) | ${{ needs.build-nokia-jar.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Android APK | ${{ needs.build-android-apk.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Artifacts sekmesinden dosyaları indirebilirsiniz." >> $GITHUB_STEP_SUMMARY
