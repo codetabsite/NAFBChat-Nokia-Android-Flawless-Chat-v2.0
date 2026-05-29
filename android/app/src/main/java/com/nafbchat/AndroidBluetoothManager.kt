@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.lang.reflect.Method
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -48,20 +49,24 @@ class AndroidBluetoothManager(
     private fun startServer() {
         Thread {
             try {
-                if (!hasBtPermission()) return@Thread
+                if (!hasBtPermission()) {
+                    onMessage("[HATA] Bluetooth izni yok")
+                    return@Thread
+                }
                 serverSocket = adapter?.listenUsingInsecureRfcommWithServiceRecord(SERVICE_NAME, NAFB_UUID)
                 onMessage("[Sistem] Bağlantı bekleniyor...")
                 while (running) {
                     try {
                         val socket = serverSocket?.accept() ?: break
+                        onMessage("[Sistem] Gelen bağlantı: ${socket.remoteDevice.address}")
                         handleSocket(socket)
                     } catch (e: IOException) {
-                        if (running) onMessage("[HATA] Sunucu: ${e.message}")
+                        if (running) onMessage("[HATA] Sunucu accept: ${e.message}")
                         break
                     }
                 }
             } catch (e: Exception) {
-                onMessage("[HATA] Sunucu: ${e.message}")
+                onMessage("[HATA] Sunucu başlatma: ${e.message}")
             }
         }.start()
     }
@@ -69,16 +74,18 @@ class AndroidBluetoothManager(
     private fun handleSocket(socket: BluetoothSocket) {
         Thread {
             val addr = socket.remoteDevice.address
-            if (connections.containsKey(addr)) { socket.close(); return@Thread }
+            if (connections.containsKey(addr)) {
+                onMessage("[Bilgi] Zaten bağlı: $addr")
+                socket.close()
+                return@Thread
+            }
             try {
                 val inp: InputStream = socket.inputStream
                 val out: OutputStream = socket.outputStream
 
-                // Kendini tanıt
                 out.write(myName.toByteArray(Charsets.UTF_8))
                 out.flush()
 
-                // Karşı tarafın adını al
                 val buf = ByteArray(512)
                 val len = inp.read(buf)
                 if (len <= 0) { socket.close(); return@Thread }
@@ -94,17 +101,17 @@ class AndroidBluetoothManager(
                     receiveMessage(String(buf, 0, n, Charsets.UTF_8), addr)
                 }
             } catch (e: IOException) {
-                // Bağlantı koptu
+                onMessage("[HATA] Socket: ${e.message}")
             } finally {
                 connections.remove(addr)
-                onMessage("[-] Bağlantı kesildi")
+                onMessage("[-] Bağlantı kesildi ($addr)")
                 activity?.setStatus("${connections.size} cihaz")
                 try { socket.close() } catch (e: IOException) {}
             }
         }.start()
     }
 
-    // ─── İstemci: otomatik bağlanma döngüsü ──────────────────────────────────
+    // ─── Otomatik bağlantı döngüsü ───────────────────────────────────────────
 
     private fun connectLoop() {
         while (running) {
@@ -119,35 +126,67 @@ class AndroidBluetoothManager(
                     }
                 }
                 Thread.sleep(15_000)
-            } catch (e: InterruptedException) {
-                break
-            } catch (e: Exception) {
-                Thread.sleep(10_000)
-            }
+            } catch (e: InterruptedException) { break }
+            catch (e: Exception) { Thread.sleep(10_000) }
         }
     }
 
-    // ─── Manuel bağlantı (cihaz listesinden seçildi) ─────────────────────────
+    // ─── Manuel bağlantı ─────────────────────────────────────────────────────
 
     fun connectToAddress(address: String) {
-        if (!hasBtPermission()) return
-        val device = adapter?.getRemoteDevice(address) ?: return
-        connectToDevice(device)
+        onMessage("[Bağlantı] $address deneniyor...")
+        if (!hasBtPermission()) {
+            onMessage("[HATA] Bluetooth izni yok")
+            return
+        }
+        try {
+            val device = adapter?.getRemoteDevice(address)
+            if (device == null) {
+                onMessage("[HATA] Cihaz bulunamadı: $address")
+                return
+            }
+            connectToDevice(device)
+        } catch (e: Exception) {
+            onMessage("[HATA] connectToAddress: ${e.message}")
+        }
     }
 
     private fun connectToDevice(device: BluetoothDevice) {
         Thread {
             val addr = device.address
             if (connections.containsKey(addr)) return@Thread
+            val name = try { device.name ?: addr } catch (e: Exception) { addr }
+            onMessage("[Bağlantı] $name ($addr) deneniyor...")
             try {
-                if (!hasBtPermission()) return@Thread
                 adapter?.cancelDiscovery()
-                val socket: BluetoothSocket =
-                    device.createInsecureRfcommSocketToServiceRecord(NAFB_UUID)
-                socket.connect()
-                handleSocket(socket)
-            } catch (e: IOException) {
-                // Bağlanamadı
+
+                // Önce normal yöntemi dene
+                var socket: BluetoothSocket? = null
+                try {
+                    socket = device.createInsecureRfcommSocketToServiceRecord(NAFB_UUID)
+                    socket.connect()
+                    onMessage("[Bağlantı] $name normal bağlandı")
+                } catch (e: IOException) {
+                    onMessage("[Bağlantı] Normal yöntem başarısız: ${e.message}, fallback deneniyor...")
+                    // Fallback: reflection ile port 1
+                    try {
+                        socket?.close()
+                    } catch (e2: Exception) {}
+                    try {
+                        val m: Method = device.javaClass.getMethod(
+                            "createInsecureRfcommSocket", Int::class.java)
+                        socket = m.invoke(device, 1) as BluetoothSocket
+                        socket.connect()
+                        onMessage("[Bağlantı] $name fallback bağlandı")
+                    } catch (e2: Exception) {
+                        onMessage("[HATA] $name bağlanamadı: ${e2.message}")
+                        return@Thread
+                    }
+                }
+
+                if (socket != null) handleSocket(socket)
+            } catch (e: Exception) {
+                onMessage("[HATA] connectToDevice: ${e.message}")
             }
         }.start()
     }
